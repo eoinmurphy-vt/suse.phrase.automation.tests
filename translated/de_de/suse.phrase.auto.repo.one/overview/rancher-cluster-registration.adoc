@@ -1,0 +1,95 @@
+= Rancher Cluster Registrierung
+:revdate: 2026-03-06
+:page-revdate: {revdate}
+
+== So registrieren Sie einen CAPI-Cluster in Rancher mit Turtles Auto-Import
+
+Der einzige unterstützte Arbeitsablauf zur Registrierung von CAPI-Clustern in Rancher unter Verwendung von Turtles ist die Verwendung des Labels `+cluster-api.cattle.io/rancher-auto-import+`:
+
+. Kennzeichnen Sie einen Namespace, damit alle darin enthaltenen Cluster importiert werden.
++
+[source,bash]
+----
+kubectl label namespace capi-clusters cluster-api.cattle.io/rancher-auto-import=true
+----
+. Kennzeichnen Sie eine einzelne Clusterdefinition, damit sie importiert werden kann.
++
+[source,bash]
+----
+kubectl label clusters.cluster.x-k8s.io cluster1 cluster-api.cattle.io/rancher-auto-import=true
+----
+
+Wenn das Auto-Import-Label verwendet wird, wartet Turtles darauf, dass der CAPI-Cluster die Bedingung `+ControlPlaneAvailable+` auf `+True+` gesetzt hat.
+Diese Bedingung unterstreicht, dass der Cluster vollständig initialisiert und für die Bearbeitung von Anfragen verfügbar ist.
+Turtles erstellt dann automatisch die Ressource Rancher `+clusters.management.cattle.io+` auf dem Management-Cluster, was zur Installation der `+cattle-cluster-agent+` auf dem nachgelagerten CAPI-Cluster führt.
+Wenn die Bereitstellung des Agenten erfolgreich war, sollte der importierte Cluster auf dem Rancher Dashboard erscheinen.
+
+[NOTE]
+====
+Ein Namensraum (oder Cluster) kann jederzeit für den Auto-Import markiert werden: vor oder nach der Erstellung des Clusters.
+====
+
+[CAUTION]
+====
+Die Markierung eines Clusters für den automatischen Import löst eine automatische Registrierung durch den Turtles-Controller aus; die manuelle Ausführung von Registrierungsbefehlen wird nicht unterstützt.
+====
+
+== Hinzufügen einer benutzerdefinierten Beschreibung zum Rancher-Cluster
+
+Die Standardbeschreibung, die einem importierten Rancher-Cluster zugewiesen wird, ist "CAPI-Cluster importiert nach Rancher".image:imported-cluster-default-description.png[Importierter Rancher-Cluster mit Standardbeschreibung]
+
+Um dem importierten Rancher-Cluster eine benutzerdefinierte Beschreibung hinzuzufügen, können Sie die Anmerkung `+cluster-api.cattle.io/cluster-description+` zu Ihrem CAPI-Cluster hinzufügen.
+
+[source,yaml]
+----
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: docker-kubeadm-quickstart
+  labels:
+    cni: calico
+  annotations:
+    cluster-api.cattle.io/cluster-description: "This is a custom description of Rancher Cluster"
+----
+
+image:imported-cluster-custom-description.png[Importierter Rancher Cluster mit benutzerdefinierter Beschreibung]
+
+Wenn ein CAPI-Cluster bereits importiert ist, bewirkt das Hinzufügen der Anmerkung nichts. Möglicherweise müssen Sie Ihren importierten Rancher-Cluster löschen und erneut importieren.
+
+== Löschen des importierten Clusters aus Rancher
+
+Die Labels `+cluster-api.cattle.io/capi-cluster-owner+` und `+cluster-api.cattle.io/capi-cluster-owner-ns+` können verwendet werden, um den Rancher-Cluster zu löschen:
+
+[source,bash]
+----
+kubectl delete clusters.management.cattle.io -l cluster-api.cattle.io/capi-cluster-owner=cluster1 -l cluster-api.cattle.io/capi-cluster-owner-ns=capi-clusters
+----
+
+Sobald der importierte Cluster zur Löschung markiert ist:
+
+. Turtles Controller wird den CAPI-Cluster mit `+imported: true+` annotieren.
+. Diese Annotation verhindert, dass der Cluster automatisch von Rancher re-importiert wird.
+. Überprüfen Sie den Vermerk mit dem folgenden Befehl:
++
+[source,bash]
+----
+kubectl -n capi-clusters get clusters.cluster.x-k8s.io cluster1 -o json | jq .metadata.annotations
+{
+"imported": "true"
+...
+}
+----
+
+[NOTE]
+====
+Durch das Löschen des Rancher-Clusters wird nur die Ressource `+clusters.management.cattle.io+` entfernt und der Auto-Import für den zugehörigen CAPI-Cluster deaktiviert. Der zugrundeliegende CAPI-Cluster selbst bleibt intakt.
+====
+
+== Cluster wieder importieren
+
+Wenn Sie denselben CAPI-Cluster erneut in Rancher importieren müssen, entfernen Sie die `+imported: true+` -Anmerkung mit dem unten stehenden Befehl:
+
+[source, bash]
+----
+kubectl -n capi-clusters patch clusters.cluster.x-k8s.io <cluster-name> --type='json' -p='[{"op": "remove", "path": "/metadata/annotations/imported"}]'
+----
