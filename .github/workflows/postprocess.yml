@@ -1,0 +1,130 @@
+name: Postprocess Translated Files
+
+on:
+  # OPTION 1: Manual Trigger (Active)
+  # Run this manually from the Actions tab when Phrase TM finishes a project
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: "Force re-process ALL files (Ignore fail-safe)"
+        type: boolean
+        required: false
+        default: false
+      specific_product:
+        description: "Specific Product ID (leave empty for all)"
+        type: string
+        required: false
+
+  # OPTION 2: Scheduled Trigger (Currently disabled for future projects)
+  # To enable overnight batching, simply remove the '#' from the two lines below.
+  # schedule:
+  #   - cron: '0 0 * * *'
+
+  # OPTION 3: Push Trigger (Currently disabled to prevent Phrase TM spam)
+  # push:
+  #   branches: [ main ]
+  #   paths:
+  #     - 'translated/**/*.adoc'
+  #     - 'postprocess_adoc.py'
+
+# The "Debounce" Safety Net: Cancels running jobs if a new trigger fires
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  postprocess:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_ALL: ${{ inputs.force_all }}
+      SPECIFIC_PRODUCT: ${{ inputs.specific_product }}
+      SRC_DIR: ${{ vars.TRANSLATED_DIR || 'translated' }}
+      DST_DIR: ${{ vars.FINAL_DIR || 'final' }}
+      CURRENT_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: pip install chardet
+
+      - name: Generate Delta Manifest
+        env:
+          # Pulls the manual checkbox value from the workflow_dispatch UI
+          FORCE_ALL_INPUT: ${{ inputs.force_all }}
+        run: |
+          if [ "$FORCE_ALL_INPUT" == "true" ]; then
+            echo "Manual Override: Processing ALL files."
+            echo "FORCE_ALL=true" >> $GITHUB_ENV
+          else
+            echo "Fail-Safe Active: Identifying only changed files..."
+            # Get the exact list of files modified in this push/batch
+            git diff-tree --no-commit-id --name-only -r ${{ github.sha }} > changed_files.txt || true
+            echo "FORCE_ALL=false" >> $GITHUB_ENV
+          fi
+
+      - name: Run Postprocessing
+        run: |
+          mkdir -p "$DST_DIR" logs
+          # The Python script will read the FORCE_ALL variable exported from the previous step
+          python postprocess_adoc.py
+
+      - name: Debug Final Folder Contents
+        run: |
+          echo "Contents of $DST_DIR:"
+          ls -R "$DST_DIR" || echo "Folder empty"
+
+      - name: Commit Final Files
+        run: |
+          git config user.name "github-actions"
+          git config user.email actions@github.com
+
+          git add "$DST_DIR/" logs/ || true
+
+          if git diff --cached --quiet; then
+            echo "No output to commit"
+            echo "COMMITTED=false" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          git commit -m "Auto-restored final AsciiDoc files after translation"
+
+          # Uses your specific secret for pushing directly to the repo
+          git remote set-url origin https://${{ secrets.VISTATEC_REPO_WRITE_PAT }}@github.com/$CURRENT_REPO.git
+
+          MAX_ATTEMPTS=10
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            # Dynamically fetch and push to the current branch (main or dev)
+            git fetch origin ${{ github.ref_name }}
+            if git rebase origin/${{ github.ref_name }}; then
+              if git push --force-with-lease origin ${{ github.ref_name }}; then
+                echo "Push succeeded"
+                echo "COMMITTED=true" >> $GITHUB_ENV
+                break
+              fi
+            else
+              git rebase --abort || true
+            fi
+            sleep 10
+            ATTEMPT=$((ATTEMPT+1))
+          done
+          if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then exit 1; fi
+
+      - name: Upload Postprocess Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: postprocess-logs
+          path: logs/postprocess_log_*.txt
+          if-no-files-found: ignore

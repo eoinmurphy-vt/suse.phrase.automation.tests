@@ -1,0 +1,141 @@
+name: Sync Changes to External Repos
+
+on:
+  # Listen for Postprocess to finish successfully
+  # workflow_run:
+  #   workflows: ["Postprocess Translated Files"]
+  #   types:
+  #     - completed
+  
+  # OPTION 1: Manual Trigger (Active)
+  workflow_dispatch:
+    inputs:
+      specific_repo_id:
+        description: "Run for a specific Client ID (leave empty for all)"
+        required: false
+        type: string
+
+  # OPTION 2: Scheduled Trigger (Currently disabled for future projects)
+  # To enable overnight batching, simply remove the '#' from the two lines below.
+  # schedule:
+  #   - cron: '0 0 * * *'
+
+concurrency:
+  group: sync-to-client-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deliver:
+    # Safety Check: Only run if Postprocess succeeded, or if triggered manually/via schedule
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          # Dynamically checkout the branch that triggered Postprocess (e.g., dev)
+          ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+
+      - name: Load Configuration
+        run: |
+          mkdir -p config
+          
+          # Check the dynamic branch name
+          CURRENT_BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          echo "Running on branch: $CURRENT_BRANCH"
+          
+          if [ "$CURRENT_BRANCH" == "dev" ]; then
+            echo '${{ vars.SUSE_CLIENT_CONFIGURATION_DEV }}' > config/clients.json
+          else
+            echo '${{ vars.SUSE_CLIENT_CONFIGURATION }}' > config/clients.json
+          fi
+          
+          if ! jq . config/clients.json >/dev/null 2>&1; then
+             echo "❌ Error: Client configuration contains invalid JSON."
+             exit 1
+          fi
+
+      - name: Distribute Files (via Pull Request)
+        env:
+          EXT_PAT: ${{ secrets.SUSE_PHRASE_CLIENT_WRITE_PAT }}
+          # The GitHub CLI needs the token passed as GH_TOKEN to authenticate the PR
+          GH_TOKEN: ${{ secrets.SUSE_PHRASE_CLIENT_WRITE_PAT }}
+          # 1. Grab the specific repo ID from the user input
+          TARGET_REPO: ${{ inputs.specific_repo_id }}
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email action@github.com
+          
+          CONFIG_FILE="config/clients.json"
+
+          for REPO_DIR in final/*; do
+            [ -d "$REPO_DIR" ] || continue
+            
+            CLIENT_ID=$(basename "$REPO_DIR")
+
+            # 2. Add the Skip Logic!
+            # If the user typed a target repo, and THIS folder doesn't match it, skip it.
+            if [ -n "$TARGET_REPO" ] && [ "$CLIENT_ID" != "$TARGET_REPO" ]; then
+              echo "⏭️ Skipping $CLIENT_ID (Targeting only $TARGET_REPO)"
+              continue
+            fi
+
+            echo ">>> Processing delivery for: $CLIENT_ID"
+
+            CLIENT_URL=$(jq -r ".[] | select(.id==\"$CLIENT_ID\") | .url" $CONFIG_FILE)
+            TARGET_PATH=$(jq -r ".[] | select(.id==\"$CLIENT_ID\") | .target_path" $CONFIG_FILE)
+            BASE_BRANCH=$(jq -r ".[] | select(.id==\"$CLIENT_ID\") | .branch" $CONFIG_FILE)
+
+            if [ -z "$CLIENT_URL" ] || [ "$CLIENT_URL" == "null" ]; then
+              echo "⚠ Warning: No configuration found for ID '$CLIENT_ID'. Skipping."
+              continue
+            fi
+            
+            TEMP_WS="workspace_$CLIENT_ID"
+            rm -rf "$TEMP_WS"
+            
+            # Clone the client repository
+            git clone --depth 1 --branch "$BASE_BRANCH" https://$EXT_PAT@github.com/$CLIENT_URL.git "$TEMP_WS"
+            
+            mkdir -p "$TEMP_WS/$(dirname "$TARGET_PATH")"
+            rsync -av "$REPO_DIR/" "$TEMP_WS/$TARGET_PATH/"
+            
+            cd "$TEMP_WS"
+            
+            # 1. Check if there are any actual changes
+            git add .
+            if git diff --cached --quiet; then
+              echo "    No changes to push for $CLIENT_ID"
+            else
+              # 2. Use a STATIC branch name (The "Evergreen" Branch)
+              PR_BRANCH="l10n-automated-delivery"
+              
+              echo "    Changes detected. Updating branch: $PR_BRANCH"
+              # Use -B to create or reset the branch to the current state
+              git checkout -B "$PR_BRANCH"
+              
+              # 3. Commit and force-push the new branch
+              git commit -m "Vistatec translation Update: Delivered processed files"
+              git push -f origin "$PR_BRANCH"
+              
+              # 4. Check if an open PR already exists for this branch using GitHub CLI
+              PR_COUNT=$(gh pr list --head "$PR_BRANCH" --state open --json number --jq '. | length')
+              
+              # 5. Open a PR *only* if one doesn't already exist
+              if [ "$PR_COUNT" -eq "0" ]; then
+                echo "    Opening new Pull Request..."
+                gh pr create \
+                  --title "🌐 Vistatec Automated Translation Update" \
+                  --body "Automated delivery of translated AsciiDoc files from Vistatec's localization pipeline. Please review the changes before merging." \
+                  --base "$BASE_BRANCH" \
+                  --head "$PR_BRANCH"
+                  
+                echo "    ✅ Successfully created PR for $CLIENT_ID"
+              else
+                echo "    ✅ Pull Request already exists! The existing PR has been silently updated with the newest files."
+              fi
+            fi
+            
+            cd ..
+            rm -rf "$TEMP_WS"
+          done

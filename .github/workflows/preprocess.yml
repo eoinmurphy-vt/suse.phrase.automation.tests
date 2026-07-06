@@ -1,0 +1,118 @@
+name: Preprocess AsciiDoc Files
+
+on:
+  # Trigger when the Sync workflow finishes successfully
+  workflow_run:
+    workflows: ["Sync Changes from External Repos"]
+    types:
+      - completed
+  
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      process_all:
+        description: "Force process ALL files (ignore history)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  preprocess:
+    # Safety Check: Only run if the Sync was actually successful OR if triggered manually
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    outputs:
+      changed_files: ${{ steps.changed.outputs.changed_files }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          # Dynamically checkout the branch that triggered the Sync workflow
+          ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          fetch-depth: 0 # For calculating diffs
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: pip install chardet
+
+      - name: Detect Changed AsciiDoc Files
+        id: changed
+        env:
+          DIR: ${{ vars.CONTENT_DIR || 'source' }}
+          FORCE_ALL: ${{ inputs.process_all }}
+        run: |
+          echo "Triggered by: ${{ github.event_name }}"
+          
+          # 1. Manual Force
+          if [ "$FORCE_ALL" == "true" ]; then
+            echo "🚀 Manual Override: Force processing ALL files..."
+            find "$DIR/" -type f -name "*.adoc" > changed_files.txt
+          
+          else
+            # 2. Smart Diff: Find last time WE (this workflow) ran
+            LAST_RUN_COMMIT=$(git log --grep="Auto-preprocessed changed AsciiDoc files" -n 1 --format="%H" || true)
+
+            if [ -z "$LAST_RUN_COMMIT" ]; then
+              echo "⚠ No previous run found. Scanning ALL files."
+              find "$DIR/" -type f -name "*.adoc" > changed_files.txt
+            else
+              echo "✅ Last Preprocess Run found at: $LAST_RUN_COMMIT"
+              echo "   Calculating changes from $LAST_RUN_COMMIT to HEAD..."
+              
+              # Diff against the last time successfully preprocessed
+              git diff --name-only --diff-filter=AM "$LAST_RUN_COMMIT" HEAD -- "$DIR/" | grep '\.adoc$' > changed_files.txt || true
+            fi
+          fi
+
+          if [ ! -s changed_files.txt ]; then
+            echo "No relevant changes detected."
+            echo "no_changes=true" >> $GITHUB_ENV
+          else
+            echo "no_changes=false" >> $GITHUB_ENV
+            echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+            cat changed_files.txt >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Preprocessing
+        if: env.no_changes == 'false'
+        run: |
+          mkdir -p processed logs
+          while IFS= read -r file; do
+            if [ -f "$file" ]; then
+                echo "Processing: $file"
+                python preprocess_adoc.py "$file"
+            fi
+          done < changed_files.txt
+
+      - name: Commit Preprocessed Files
+        if: env.no_changes == 'false'
+        run: |
+          git config user.name "github-actions"
+          git config user.email actions@github.com
+
+          git add processed/ logs/ || true
+
+          if git diff --cached --quiet; then
+            echo "No files changed; skipping commit"
+          else
+            git commit -m "Auto-preprocessed changed AsciiDoc files"
+            # Push dynamically to the correct branch
+            git push origin ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          fi
+
+      - name: Upload Preprocess Logs
+        if: env.no_changes == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: preprocess-logs
+          path: logs/preprocess_log_*.txt
+          if-no-files-found: ignore

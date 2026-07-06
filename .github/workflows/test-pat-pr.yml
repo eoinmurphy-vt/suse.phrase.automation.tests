@@ -1,0 +1,46 @@
+name: Test PAT PR Permissions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-pat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Test PR
+        env:
+          EXT_PAT: ${{ secrets.SUSE_PHRASE_CLIENT_WRITE_PAT }}
+          GH_TOKEN: ${{ secrets.SUSE_PHRASE_CLIENT_WRITE_PAT }}
+          # UPDATE THIS TO YOUR TEST TARGET REPO:
+          CLIENT_URL: "fsundermeyer/rke2-product-docs" 
+          BASE_BRANCH: "main"
+        run: |
+          echo ">>> Cloning test repository..."
+          git clone --depth 1 --branch "$BASE_BRANCH" https://$EXT_PAT@github.com/$CLIENT_URL.git workspace
+          cd workspace
+          
+          git config user.name "GitHub Action Test"
+          git config user.email action@github.com
+          
+          # Create a unique test branch
+          TIMESTAMP=$(date +%s)
+          PR_BRANCH="pat-test-$TIMESTAMP"
+          git checkout -b "$PR_BRANCH"
+          
+          # Make a harmless dummy file
+          echo "If you can see this, the PAT has the correct permissions!" > pat_test_file.txt
+          
+          # Commit and push
+          git add pat_test_file.txt
+          git commit -m "🧪 Automated Test: Verifying PAT permissions"
+          git push origin "$PR_BRANCH"
+          
+          # Attempt to open the PR
+          echo ">>> Attempting to open Pull Request..."
+          gh pr create \
+            --title "🧪 Automated Test PR: Verifying Permissions" \
+            --body "This is an automated test from the localization pipeline to ensure the Personal Access Token can successfully open PRs. You can safely close this PR and delete the branch." \
+            --base "$BASE_BRANCH" \
+            --head "$PR_BRANCH"
+            
+          echo "✅ SUCCESS! The PAT has full Read & Write permissions for Pull Requests."

@@ -1,0 +1,76 @@
+name: Pull from Phrase Incoming Branch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phrase-incoming
+      - phrase-incoming-dev
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  TRANSLATED_DIR: ${{ vars.TRANSLATED_DIR || 'translated' }}
+  # Target `dev` if the incoming branch has dev in the name, else target `main`
+  TARGET_BRANCH: ${{ contains(github.ref_name, 'dev') && 'dev' || 'main' }}
+
+jobs:
+  sync-incoming:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.TARGET_BRANCH }}
+          token: ${{ secrets.VISTATEC_REPO_TRIGGER_PAT }}
+
+      - name: Fetch all branches
+        run: |
+          git fetch --all --prune
+          echo "Available branches:"
+          git branch -a
+
+      - name: Overlay translated/ from phrase branch
+        run: |
+          echo "Overlaying translated/ from origin/${{ github.ref_name }}…"
+          # Dynamically checkout from the incoming phrase branch
+          git checkout "origin/${{ github.ref_name }}" -- "${TRANSLATED_DIR}/"
+
+      - name: Commit translated files into target branch
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email actions@github.com
+
+          git add "$TRANSLATED_DIR"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Sync translated content from ${{ github.ref_name }}"
+          git remote set-url origin https://${{ secrets.VISTATEC_REPO_TRIGGER_PAT }}@github.com/${{ github.repository }}.git
+
+          MAX_ATTEMPTS=10
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            # Dynamically push back to the target branch (main or dev)
+            git fetch origin ${{ env.TARGET_BRANCH }}
+            if git rebase origin/${{ env.TARGET_BRANCH }}; then
+              if git push origin ${{ env.TARGET_BRANCH }} --force-with-lease; then
+                echo "Successfully pushed on attempt $ATTEMPT"
+                exit 0
+              fi
+            else
+              git rebase --abort || true
+            fi
+            echo "Retry $ATTEMPT failed, waiting..."
+            sleep $((ATTEMPT * 5))
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+          echo "Failed after $MAX_ATTEMPTS attempts"
+          exit 1
