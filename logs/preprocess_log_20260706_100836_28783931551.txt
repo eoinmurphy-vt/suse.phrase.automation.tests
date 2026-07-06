@@ -1,0 +1,45 @@
+Starting preprocess: source/suse.phrase.auto.repo.one/today/04-write-validation-logic.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/today/04-write-validation-logic.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 0
+
+Completed at 2026-07-06 10:08:36.730217
+Starting preprocess: source/suse.phrase.auto.repo.one/today/04-example-sigstore.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/today/04-example-sigstore.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 0
+
+Completed at 2026-07-06 10:08:36.781952
+Starting preprocess: source/suse.phrase.auto.repo.one/overview/architecture.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/overview/architecture.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 0
+
+Completed at 2026-07-06 10:08:36.833272
+Starting preprocess: source/suse.phrase.auto.repo.one/overview/rancher-cluster-registration.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/overview/rancher-cluster-registration.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 1
+
+Completed at 2026-07-06 10:08:36.885584
+Starting preprocess: source/suse.phrase.auto.repo.one/certified.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/certified.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 0
+
+Completed at 2026-07-06 10:08:36.937300
