@@ -1,0 +1,45 @@
+Starting preprocess: source/suse.phrase.auto.repo.one/clusterclass.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/clusterclass.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 0
+
+Completed at 2026-07-06 11:25:10.772666
+Starting preprocess: source/suse.phrase.auto.repo.one/development.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/development.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 0
+
+Completed at 2026-07-06 11:25:10.821646
+Starting preprocess: source/suse.phrase.auto.repo.one/operator/certification.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/operator/certification.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 0
+
+Completed at 2026-07-06 11:25:10.877645
+Starting preprocess: source/suse.phrase.auto.repo.one/today/05-mutation-policy.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/today/05-mutation-policy.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 0
+
+Completed at 2026-07-06 11:25:10.927190
+Starting preprocess: source/suse.phrase.auto.repo.one/today/required_permissions.adoc
+Saved processed file → processed/suse.phrase.auto.repo.one/today/required_permissions.adoc
+
+Summary:
+  ✅ Processed: 1
+  ⚠️ Encoding issues fixed: 0
+  ✅ Normalized files: 0
+
+Completed at 2026-07-06 11:25:10.984658
