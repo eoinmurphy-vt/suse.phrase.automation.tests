@@ -1,0 +1,7 @@
+Postprocess started: 2026-07-06 12:38:28.300663
+
+✓ Processed: de_de/suse.phrase.auto.repo.one/development.adoc -> final/suse.phrase.auto.repo.one/de/development.adoc
+✓ Processed: de_de/suse.phrase.auto.repo.one/operator/certification.adoc -> final/suse.phrase.auto.repo.one/de/operator/certification.adoc
+
+=== Test Complete ===
+Summary: Processed=2, Cleaned=2, Errors=0, Skipped=0
