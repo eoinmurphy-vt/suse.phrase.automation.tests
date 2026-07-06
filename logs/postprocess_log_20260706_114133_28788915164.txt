@@ -1,0 +1,10 @@
+Postprocess started: 2026-07-06 11:41:33.623154
+
+✓ Processed: de_de/suse.phrase.auto.repo.one/clusterclass.adoc -> final/suse.phrase.auto.repo.one/de/clusterclass.adoc
+✓ Processed: de_de/suse.phrase.auto.repo.one/development.adoc -> final/suse.phrase.auto.repo.one/de/development.adoc
+✓ Processed: de_de/suse.phrase.auto.repo.one/operator/certification.adoc -> final/suse.phrase.auto.repo.one/de/operator/certification.adoc
+✓ Processed: de_de/suse.phrase.auto.repo.one/today/05-mutation-policy.adoc -> final/suse.phrase.auto.repo.one/de/today/05-mutation-policy.adoc
+✓ Processed: de_de/suse.phrase.auto.repo.one/today/required_permissions.adoc -> final/suse.phrase.auto.repo.one/de/today/required_permissions.adoc
+
+=== Test Complete ===
+Summary: Processed=5, Cleaned=5, Errors=0, Skipped=0

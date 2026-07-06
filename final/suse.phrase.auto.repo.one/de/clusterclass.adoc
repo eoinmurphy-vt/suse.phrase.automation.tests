@@ -1,0 +1,37 @@
+= Aktivieren der ClusterClass
+:revdate: 2025-06-30
+:page-revdate: {revdate}
+
+In diesem Abschnitt wird die Aktivierung der https://cluster-api.sigs.k8s.io/tasks/experimental-features/cluster-class/[*ClusterKlasse*] Funktion für einen CAPI-Provider.
+
+[TIP]
+====
+Bevor Sie die ClusterClass-Funktion verwenden, sollten Sie die Anbieterdokumentation studieren und sich vergewissern, dass die Funktion unterstützt wird. Diese Dokumentation enthält im Abschnitt xref:../overview/certified.adoc[Zertifizierte Anbieter] eine Matrix mit dem xref:../overview/certified.adoc#_clusterclass_support_for_certified_providers[Status der Unterstützung von Clustertopologien].
+====
+
+== Aktivieren der ClusterClass
+
+Um die ClusterClass-Funktion verwenden zu können, muss sie für die zentrale Cluster-API und jeden Anbieter, der sie unterstützt, aktiviert werden. Dazu wird die Variable `CLUSTER_TOPOLOGY` auf `true` gesetzt.
+
+Die {product_name} Helmkarte aktiviert diese Funktion automatisch bei der Installation von CAPI. Wenn Sie jedoch zusätzliche Anbieter aktivieren, stellen Sie sicher, dass `CLUSTER_TOPOLOGY` in der Anbieterkonfiguration eingestellt ist. Die xref:../reference/capiprovider.adoc[CAPIProvider-Ressource] von Turtles unterstützt die Übergabe von Installationsparametern an den Provider über `variables` wie folgt:
+
+[source,yaml]
+----
+apiVersion: turtles-capi.cattle.io/v1alpha1
+kind: CAPIProvider
+metadata:
+  name: azure
+  namespace: capz-system
+spec:
+  type: infrastructure
+  name: azure
+  configSecret:
+    name: azure-variables
+  variables:
+    CLUSTER_TOPOLOGY: "true"
+    EXP_CLUSTER_RESOURCE_SET: "true"
+    EXP_MACHINE_POOL: "true"
+    EXP_AKS_RESOURCE_HEALTH: "true"
+----
+
+Die in dieser YAML-Datei definierte Ressource installiert CAPZ mit Unterstützung für eine Reihe von Funktionen, einschließlich `CLUSTER_TOPOLOGY`.
